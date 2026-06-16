@@ -33,6 +33,7 @@ export const api = {
   createCreative: (body: any) =>
     req("/creatives", { method: "POST", body: JSON.stringify(body) }),
   approveCreative: (id: number) => req(`/creatives/${id}/approve`, { method: "POST" }),
+  rejectCreative: (id: number) => req(`/creatives/${id}/reject`, { method: "POST" }),
   campaigns: () => req("/campaigns"),
   createCampaign: (body: any) =>
     req("/campaigns", { method: "POST", body: JSON.stringify(body) }),
