@@ -1,0 +1,51 @@
+# Render Blueprint — deploys the whole stack: PostgreSQL + FastAPI backend +
+# Next.js frontend. Push this repo to GitHub, then in Render:
+#   New +  ->  Blueprint  ->  pick this repo  ->  Apply.
+# After the services are created, set ANTHROPIC_API_KEY on the backend service
+# (Dashboard -> agentic-os-backend -> Environment). That is the only secret.
+#
+# Notes:
+# - Meta Ads stays in sandbox (META_LIVE=false): no Meta credentials needed.
+# - Free plans cold-start after inactivity; bump to a paid plan to keep warm.
+
+databases:
+  - name: agentic-os-db
+    plan: free
+
+services:
+  - type: web
+    name: agentic-os-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agentic-os-db
+          property: connectionString
+      - key: ANTHROPIC_API_KEY
+        sync: false # set this yourself in the dashboard (kept out of git)
+      - key: ANTHROPIC_MODEL
+        value: claude-3-5-haiku-latest
+      - key: LLM_PROVIDER
+        value: auto
+      - key: MCP_ENABLED
+        value: "true"
+      - key: META_LIVE
+        value: "false"
+
+  - type: web
+    name: agentic-os-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: free
+    envVars:
+      # The frontend proxies /api/* to the backend (resolved at runtime).
+      - key: BACKEND_URL
+        fromService:
+          type: web
+          name: agentic-os-backend
+          property: host

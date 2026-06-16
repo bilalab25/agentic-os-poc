@@ -1,5 +1,7 @@
 // Thin typed-ish client for the Agentic OS backend.
-const BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+// Default to the same-origin "/api" proxy (see next.config.js rewrites); set
+// NEXT_PUBLIC_API_BASE to call a backend URL directly instead.
+const BASE = process.env.NEXT_PUBLIC_API_BASE || "/api";
 
 // Demo actor; a real deployment would derive this from the SSO/JWT session.
 const ACTOR = "agent@dezy.local";

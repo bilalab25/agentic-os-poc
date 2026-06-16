@@ -5,6 +5,7 @@ credentials, governance actor) is centralised here so nothing is hardcoded.
 """
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -55,6 +56,17 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @field_validator("database_url")
+    @classmethod
+    def _normalize_database_url(cls, v: str) -> str:
+        # Managed providers (e.g. Render) hand out `postgres://` URLs, but
+        # SQLAlchemy 2.x needs an explicit driver. Normalise to psycopg2.
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+psycopg2://", 1)
+        if v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+psycopg2://", 1)
+        return v
 
 
 @lru_cache

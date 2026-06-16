@@ -70,6 +70,12 @@ docker compose up --build
 # frontend http://localhost:3000 · backend http://localhost:8000
 ```
 
+### Deploy a live demo (Render)
+
+A one-click-ish **`render.yaml`** blueprint deploys Postgres + backend + frontend.
+Push to GitHub → Render → **New + → Blueprint** → pick the repo → set
+`ANTHROPIC_API_KEY`. Full click-by-click in **[`DEPLOY.md`](./DEPLOY.md)**.
+
 ---
 
 ## Prove it works without the UI
