@@ -6,19 +6,38 @@ const BASE = process.env.NEXT_PUBLIC_API_BASE || "/api";
 // Demo actor; a real deployment would derive this from the SSO/JWT session.
 const ACTOR = "agent@dezy.local";
 
+const COLD =
+  "The backend is waking up (free-tier cold start). This takes ~30–60s — it will retry automatically.";
+
 async function req(path: string, opts: RequestInit = {}) {
-  const res = await fetch(BASE + path, {
-    headers: { "Content-Type": "application/json", "X-Actor": ACTOR },
-    ...opts,
-  });
+  let res: Response;
+  try {
+    res = await fetch(BASE + path, {
+      headers: { "Content-Type": "application/json", "X-Actor": ACTOR },
+      ...opts,
+    });
+  } catch {
+    throw new Error(COLD);
+  }
+
   if (!res.ok) {
-    let detail = await res.text();
-    try {
-      detail = JSON.parse(detail).detail ?? detail;
-    } catch {
-      /* keep raw text */
+    // Gateway / rate-limit responses during a cold start: keep the message
+    // clean (never surface the provider's raw HTML error page).
+    if (res.status === 502 || res.status === 503 || res.status === 504) throw new Error(COLD);
+    if (res.status === 429) throw new Error("Service is warming up (too many requests) — retrying shortly.");
+
+    const ct = res.headers.get("content-type") || "";
+    let detail = "";
+    if (ct.includes("application/json")) {
+      try {
+        detail = (await res.json())?.detail ?? "";
+      } catch {
+        /* ignore */
+      }
+    } else {
+      detail = res.statusText;
     }
-    throw new Error(`${res.status} — ${detail}`);
+    throw new Error(`${res.status}${detail ? " — " + detail : ""}`);
   }
   return res.json();
 }

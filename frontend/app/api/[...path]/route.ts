@@ -15,6 +15,8 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
   const search = req.nextUrl.search || "";
   const target = `${backendBase()}/${path.join("/")}${search}`;
 
+  const bodyText =
+    req.method !== "GET" && req.method !== "HEAD" ? await req.text() : undefined;
   const init: RequestInit = {
     method: req.method,
     headers: {
@@ -22,12 +24,24 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
       // Forward the actor for the audit trail (SSO/JWT would supply this in prod).
       "x-actor": req.headers.get("x-actor") || "web@dezy.local",
     },
+    ...(bodyText !== undefined ? { body: bodyText } : {}),
   };
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    init.body = await req.text();
+
+  // Retry gateway errors so a cold (free-tier) backend has time to wake within
+  // a single request, instead of bubbling a 502 to the UI.
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    res = await fetch(target, init).catch(() => null);
+    if (res && ![502, 503, 504].includes(res.status)) break;
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 3000));
+  }
+  if (!res) {
+    return new Response(JSON.stringify({ detail: "backend unreachable" }), {
+      status: 503,
+      headers: { "content-type": "application/json" },
+    });
   }
 
-  const res = await fetch(target, init);
   const body = await res.text();
   return new Response(body, {
     status: res.status,

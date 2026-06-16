@@ -75,7 +75,25 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    refresh().catch((e) => setError(e?.message || "Could not reach the API (it may be waking up — retry in ~30s)."));
+    // Auto-retry the initial load: a free-tier backend may be cold (~30–60s),
+    // so we poll until it answers instead of leaving the user on an error.
+    let cancelled = false;
+    let attempts = 0;
+    const tick = async () => {
+      try {
+        await refresh();
+        if (!cancelled) setError("");
+      } catch (e: any) {
+        if (cancelled) return;
+        attempts += 1;
+        setError(e?.message || "Connecting…");
+        if (attempts < 15) setTimeout(tick, 5000);
+      }
+    };
+    tick();
+    return () => {
+      cancelled = true;
+    };
   }, [refresh]);
 
   return (
