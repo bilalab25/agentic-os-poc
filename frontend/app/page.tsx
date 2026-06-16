@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { api } from "./lib/api";
 
 function Badge({ status }: { status: string }) {
@@ -26,6 +26,7 @@ export default function Page() {
   const [busy, setBusy] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [emailView, setEmailView] = useState<any>(null);
+  const [expanded, setExpanded] = useState<number | null>(null);
 
   const [form, setForm] = useState<any>({
     full_name: "",
@@ -425,10 +426,15 @@ export default function Page() {
       {/* AUDIT LOG */}
       <div className="card">
         <h2>📜 Audit log (append-only, newest first)</h2>
+        <p className="muted" style={{ marginTop: -6, marginBottom: 12, fontSize: 13 }}>
+          Click any row to see the full immutable record — prompt, model, output,
+          timestamp, actor — plus the hash link to the previous event.
+        </p>
         <table>
           <thead>
             <tr>
               <th>ID</th>
+              <th>Time (UTC)</th>
               <th>Actor</th>
               <th>Action</th>
               <th>Category</th>
@@ -438,22 +444,71 @@ export default function Page() {
           </thead>
           <tbody>
             {audit.map((e) => (
-              <tr key={e.id}>
-                <td>{e.id}</td>
-                <td className="mono">{e.actor}</td>
-                <td>{e.action}</td>
-                <td>
-                  <span className="badge muted">{e.category}</span>
-                </td>
-                <td className="muted mono">{e.model || "—"}</td>
-                <td className="mono hashcell" title={e.hash}>
-                  {e.hash.slice(0, 12)}…
-                </td>
-              </tr>
+              <Fragment key={e.id}>
+                <tr
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setExpanded(expanded === e.id ? null : e.id)}
+                >
+                  <td>
+                    {expanded === e.id ? "▾" : "▸"} {e.id}
+                  </td>
+                  <td className="muted mono">{(e.ts || "").replace("T", " ").slice(0, 19)}</td>
+                  <td className="mono">{e.actor}</td>
+                  <td>{e.action}</td>
+                  <td>
+                    <span className="badge muted">{e.category}</span>
+                  </td>
+                  <td className="muted mono">{e.model || "—"}</td>
+                  <td className="mono hashcell" title={e.hash}>
+                    {e.hash.slice(0, 12)}…
+                  </td>
+                </tr>
+                {expanded === e.id && (
+                  <tr>
+                    <td colSpan={7} style={{ background: "var(--panel-2)" }}>
+                      <div className="grid" style={{ gap: 8, fontSize: 12 }}>
+                        <div>
+                          <span className="muted">timestamp:</span>{" "}
+                          <span className="mono">{e.ts}</span> ·{" "}
+                          <span className="muted">resource:</span>{" "}
+                          <span className="mono">
+                            {e.resource_type || "—"}#{e.resource_id || "—"}
+                          </span>
+                        </div>
+                        {e.prompt && (
+                          <div>
+                            <div className="muted">prompt:</div>
+                            <div className="pre">{e.prompt}</div>
+                          </div>
+                        )}
+                        {e.output && (
+                          <div>
+                            <div className="muted">output:</div>
+                            <div className="pre">{e.output}</div>
+                          </div>
+                        )}
+                        {e.event_metadata && Object.keys(e.event_metadata).length > 0 && (
+                          <div>
+                            <div className="muted">metadata (incl. intended API call for ad actions):</div>
+                            <div className="pre">
+                              {JSON.stringify(e.event_metadata, null, 2)}
+                            </div>
+                          </div>
+                        )}
+                        <div className="mono" style={{ wordBreak: "break-all" }}>
+                          <span className="muted">prev_hash:</span> {e.prev_hash}
+                          <br />
+                          <span className="muted">hash:</span> {e.hash}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
             {audit.length === 0 && (
               <tr>
-                <td colSpan={6} className="muted">
+                <td colSpan={7} className="muted">
                   No events yet.
                 </td>
               </tr>
