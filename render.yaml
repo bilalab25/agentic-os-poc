@@ -28,7 +28,7 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false # set this yourself in the dashboard (kept out of git)
       - key: ANTHROPIC_MODEL
-        value: claude-3-5-haiku-latest
+        value: claude-haiku-4-5-20251001
       - key: LLM_PROVIDER
         value: auto
       - key: MCP_ENABLED

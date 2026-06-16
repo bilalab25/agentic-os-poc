@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # "mock"  -> force the deterministic offline provider
     llm_provider: str = "auto"
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-3-5-haiku-latest"
+    anthropic_model: str = "claude-haiku-4-5-20251001"
     llm_max_tokens: int = 600
 
     # --- Lead qualification ------------------------------------------------

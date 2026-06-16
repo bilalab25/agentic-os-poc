@@ -57,7 +57,7 @@ Create campaign → Launch → Insights → Verify chain.**
 ```bash
 # backend/.env
 ANTHROPIC_API_KEY=sk-ant-...
-# optional: ANTHROPIC_MODEL=claude-3-5-haiku-latest
+# optional: ANTHROPIC_MODEL=claude-haiku-4-5-20251001
 ```
 
 Restart the backend. The audit trail records the real model and prompt; mock
