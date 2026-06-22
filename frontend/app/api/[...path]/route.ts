@@ -27,13 +27,14 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
     ...(bodyText !== undefined ? { body: bodyText } : {}),
   };
 
-  // Retry gateway errors so a cold (free-tier) backend has time to wake within
-  // a single request, instead of bubbling a 502 to the UI.
-  let res: Response | null = null;
-  for (let attempt = 0; attempt < 4; attempt++) {
+  // Gentle single retry on a gateway error (cold backend). We deliberately do
+  // NOT retry hard here — the client uses a single-request wake-up gate, so the
+  // proxy must not multiply requests (that previously caused 429 rate-limiting).
+  // 429 is passed straight through so the client can back off.
+  let res: Response | null = await fetch(target, init).catch(() => null);
+  if (res && [502, 503, 504].includes(res.status)) {
+    await new Promise((r) => setTimeout(r, 2500));
     res = await fetch(target, init).catch(() => null);
-    if (res && ![502, 503, 504].includes(res.status)) break;
-    if (attempt < 3) await new Promise((r) => setTimeout(r, 3000));
   }
   if (!res) {
     return new Response(JSON.stringify({ detail: "backend unreachable" }), {

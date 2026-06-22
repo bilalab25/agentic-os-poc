@@ -75,22 +75,48 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    // Auto-retry the initial load: a free-tier backend may be cold (~30–60s),
-    // so we poll until it answers instead of leaving the user on an error.
+    // WAKE-UP GATE. A free-tier backend can be cold (~30–70s). To avoid
+    // hammering it (which triggers 429 rate-limiting), we probe ONE cheap
+    // endpoint (/health) on a backoff until it answers — exactly one request
+    // per tick — and only THEN load all the data once.
     let cancelled = false;
-    let attempts = 0;
-    const tick = async () => {
-      try {
-        await refresh();
-        if (!cancelled) setError("");
-      } catch (e: any) {
-        if (cancelled) return;
-        attempts += 1;
-        setError(e?.message || "Connecting…");
-        if (attempts < 15) setTimeout(tick, 5000);
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    const connect = async () => {
+      // Phase 1: wait for the backend to be awake (single request per attempt).
+      let awake = false;
+      for (let attempt = 0; attempt < 30 && !cancelled; attempt++) {
+        try {
+          await api.health();
+          awake = true;
+          break;
+        } catch {
+          if (cancelled) return;
+          setError(
+            "Waking the server… (free-tier cold start, ~30–60s). This will load automatically.",
+          );
+          // exponential backoff, capped at 12s, so we never flood the server.
+          await sleep(Math.min(3000 * Math.pow(1.4, attempt), 12000));
+        }
+      }
+      if (cancelled || !awake) return;
+
+      // Phase 2: backend is warm — load everything once (with a couple of
+      // gentle retries spaced out, just in case).
+      for (let attempt = 0; attempt < 4 && !cancelled; attempt++) {
+        try {
+          await refresh();
+          if (!cancelled) setError("");
+          return;
+        } catch (e: any) {
+          if (cancelled) return;
+          setError(e?.message || "Connecting…");
+          await sleep(4000);
+        }
       }
     };
-    tick();
+
+    connect();
     return () => {
       cancelled = true;
     };
