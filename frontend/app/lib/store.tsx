@@ -83,27 +83,30 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
     const connect = async () => {
-      // Phase 1: wait for the backend to be awake (single request per attempt).
-      let awake = false;
-      for (let attempt = 0; attempt < 30 && !cancelled; attempt++) {
+      // Phase 1: wait for the backend to be awake. ONE request per attempt,
+      // backoff capped at 10s, and it NEVER gives up — so if the free-tier
+      // backend takes a while (or wakes late), the page recovers on its own
+      // with no manual refresh. The steady probing also helps keep it warm.
+      let attempt = 0;
+      while (!cancelled) {
         try {
           await api.health();
-          awake = true;
-          break;
+          break; // awake!
         } catch {
           if (cancelled) return;
           setError(
-            "Waking the server… (free-tier cold start, ~30–60s). This will load automatically.",
+            "Waking the server… (free-tier cold start — can take up to ~90s). " +
+              "It loads automatically, no need to refresh.",
           );
-          // exponential backoff, capped at 12s, so we never flood the server.
-          await sleep(Math.min(3000 * Math.pow(1.4, attempt), 12000));
+          await sleep(Math.min(2500 * Math.pow(1.35, attempt), 10000));
+          attempt += 1;
         }
       }
-      if (cancelled || !awake) return;
+      if (cancelled) return;
 
-      // Phase 2: backend is warm — load everything once (with a couple of
-      // gentle retries spaced out, just in case).
-      for (let attempt = 0; attempt < 4 && !cancelled; attempt++) {
+      // Phase 2: backend is warm — load everything once, with a few gentle
+      // retries, then fall back to probing again if it somehow fails.
+      for (let i = 0; i < 5 && !cancelled; i++) {
         try {
           await refresh();
           if (!cancelled) setError("");
@@ -114,6 +117,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           await sleep(4000);
         }
       }
+      // Extremely rare: warm probe succeeded but loads kept failing — restart.
+      if (!cancelled) connect();
     };
 
     connect();
