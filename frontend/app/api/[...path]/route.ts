@@ -30,17 +30,22 @@ async function proxy(req: NextRequest, path: string[]): Promise<Response> {
   // Gentle single retry on a gateway error (cold backend). We deliberately do
   // NOT retry hard here — the client uses a single-request wake-up gate, so the
   // proxy must not multiply requests (that previously caused 429 rate-limiting).
-  // 429 is passed straight through so the client can back off.
   let res: Response | null = await fetch(target, init).catch(() => null);
   if (res && [502, 503, 504].includes(res.status)) {
     await new Promise((r) => setTimeout(r, 2500));
     res = await fetch(target, init).catch(() => null);
   }
-  if (!res) {
-    return new Response(JSON.stringify({ detail: "backend unreachable" }), {
-      status: 503,
-      headers: { "content-type": "application/json" },
-    });
+
+  // ABSORB cold-start / rate-limit / unreachable upstreams: return HTTP 200 with
+  // a quiet {__waking} flag instead of a 4xx/5xx. This stops the browser from
+  // logging red "Failed to load resource" console errors while the free-tier
+  // backend wakes. The client treats __waking as "retry quietly".
+  const GATEWAY = new Set([429, 502, 503, 504]);
+  if (!res || GATEWAY.has(res.status)) {
+    return new Response(
+      JSON.stringify({ __waking: true, upstream: res ? res.status : 0 }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
   }
 
   const body = await res.text();

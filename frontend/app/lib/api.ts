@@ -39,7 +39,12 @@ async function req(path: string, opts: RequestInit = {}) {
     }
     throw new Error(`${res.status}${detail ? " — " + detail : ""}`);
   }
-  return res.json();
+
+  const data = await res.json().catch(() => null);
+  // The proxy returns HTTP 200 with {__waking:true} during a cold start so the
+  // browser never logs a red network error. Treat it as "not ready yet."
+  if (data && data.__waking) throw new Error(COLD);
+  return data;
 }
 
 export const api = {
